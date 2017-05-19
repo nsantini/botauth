@@ -79,7 +79,7 @@ export class AuthDialog extends builder.Dialog {
     public begin<T>(session: builder.Session, args?: IAuthDialogOptions): void {
         // persist original args to session in case we get restarted.
         if(!session.dialogData.savedArgs) {
-            session.dialogData. savedArgs = args || {};
+            session.dialogData.savedArgs = args || {};
             session.save();
         }
 

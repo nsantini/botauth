@@ -35,6 +35,7 @@ import cookie = require("cookie");
 export interface IResumptionProvider {
     persistHandler(): (req: any, res: any, next: any) => void;
     restoreHandler(): (req: any, res: any, next: any) => void;
+    addresses: Object;
 }
 
 /**
@@ -42,10 +43,12 @@ export interface IResumptionProvider {
  * between redirect and callback of authentication.
  */
 export class CookieResumption implements IResumptionProvider {
+    addresses: Object;
     /**
      * 
      */
     constructor(private maxAge: number, private secret: string) {
+        this.addresses = {}
     }
 
     /**
@@ -59,12 +62,8 @@ export class CookieResumption implements IResumptionProvider {
             let cypher = crypto.createCipher("aes192", secret);
             let cookieValue = cypher.update(req.query.state, "utf8", "base64") + cypher.final("base64");
 
-            if (res.header("Set-Cookie")) {
-                // todo: append cookie
-            } else {
-                let c = cookie.serialize("botauth", cookieValue, { maxAge : maxAge, httpOnly : true, secure : true });
-                res.header("Set-Cookie", c);
-            }
+            this.addresses[req.params.id] = cookie.serialize("botauth", cookieValue, { maxAge : maxAge, httpOnly : true });
+
             next();
         };
     }
@@ -77,7 +76,7 @@ export class CookieResumption implements IResumptionProvider {
 
         // return implementation of the handler
         return (req, res, next) => {
-            let cookies: any = cookie.parse(req.headers.cookie || "");
+            let cookies: any = cookie.parse(this.addresses[req.params.id]);
 
             if (cookies && cookies.botauth) {
                 let decypher = crypto.createDecipher("aes192", secret);
@@ -88,7 +87,7 @@ export class CookieResumption implements IResumptionProvider {
                 req.locals.resumption = cookieValue;
 
                 // delete the cookie
-                res.header("Set-Cookie", cookie.serialize("botauth", "", { maxAge: 0, httpOnly: true, secure: true }));
+                res.header("Set-Cookie", cookie.serialize("botauth", "", { maxAge: 0, httpOnly: true }));
             }
 
             next();

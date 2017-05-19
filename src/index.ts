@@ -65,7 +65,7 @@ const defaultOptions: IBotAuthenticatorOptions = {
 };
 
 export interface IStrategyOptions {
-    callbackURL: string;
+    callbackURL?: string;
 }
 
 export interface IStrategy {
@@ -101,7 +101,7 @@ export class BotAuthenticator {
             throw new Error("options.baseUrl can not be null");
         } else {
             let parsedUrl = url.parse(this.options.baseUrl);
-            if (parsedUrl.protocol !== "https:" || !parsedUrl.slashes || !parsedUrl.hostname) {
+            if (!parsedUrl.slashes || !parsedUrl.hostname) {
                 throw new Error("options.baseUrl must be a valid url and start with 'https://'.");
             }
         }
@@ -128,9 +128,9 @@ export class BotAuthenticator {
         }
 
         // add routes for handling oauth redirect and callbacks
-        this.server.get(`/${this.options.basePath}/:providerId`, this.options.resumption.persistHandler(), this.passport_redirect());
-        this.server.get(`/${this.options.basePath}/:providerId/callback`, this.passport_callback(), this.options.resumption.restoreHandler(), this.credential_callback());
-        this.server.post(`/${this.options.basePath}/:providerId/callback`, this.passport_callback(), this.options.resumption.restoreHandler(), this.credential_callback());
+        this.server.get(`/${this.options.basePath}/:providerId/:id`, this.options.resumption.persistHandler(), this.passport_redirect());
+        this.server.get(`/${this.options.basePath}/:providerId/callback/:id`, this.passport_callback(), this.options.resumption.restoreHandler(), this.credential_callback());
+        this.server.post(`/${this.options.basePath}/:providerId/callback/:id`, this.passport_callback(), this.options.resumption.restoreHandler(), this.credential_callback());
 
         // configure bot to save conversation and user scoped data
         // todo: should we use our own bot storage connection to avoid overwriting these??
@@ -152,9 +152,7 @@ export class BotAuthenticator {
      * @return {BotAuth} this
      */
     public provider(name: string, factory: (options: IStrategyOptions) => IStrategy): BotAuthenticator {
-        let s: Strategy = factory({
-            callbackURL: this.callbackUrl(name)
-        });
+        let s: Strategy = factory({});
 
         if (!s) {
             throw new Error("The 'factory' method passed to BotAuthenticator.provider must return an instance of an authentication Strategy.");
@@ -182,10 +180,11 @@ export class BotAuthenticator {
                 } else {
                     // pass context to redirect
                     let cxt = new Buffer(JSON.stringify(session.message.address)).toString("base64");
+                    let originalArgs = args ? args.response : {};
                     session.beginDialog(DIALOG_FULLNAME, {
                         providerId: providerId,
-                        buttonUrl: this.authUrl(providerId, cxt),
-                        originalArgs: args.response
+                        buttonUrl: this.authUrl(providerId, cxt, session.message.address.user.id),
+                        originalArgs: originalArgs
                     });
                 }
             },
@@ -239,8 +238,8 @@ export class BotAuthenticator {
         return `${this.options.baseUrl}/${this.options.basePath}/${providerName}/callback`;
     }
 
-    private authUrl(providerName: string, state: string) {
-        return `${this.options.baseUrl}/${this.options.basePath}/${providerName}?state=${ encodeURIComponent(state) }`;
+    private authUrl(providerName: string, state: string, userId: string) {
+        return `${this.options.baseUrl}/${this.options.basePath}/${providerName}/${userId}?state=${ encodeURIComponent(state) }`;
     }
 
     /**
@@ -253,7 +252,7 @@ export class BotAuthenticator {
             let providerId: string = (<any>req.params).providerId;
 
             // this redirects to the authentication provider
-            return passport.authenticate(providerId, { session: session })(req, res, next);
+            return passport.authenticate(providerId, { session: session, callbackURL: `/${this.options.basePath}/${req.params.providerId}/callback/${req.params.id}` })(req, res, next);
         };
     }
 
@@ -265,7 +264,7 @@ export class BotAuthenticator {
 
         return (req: IServerRequest, res: IServerResponse, next: NextFunction): any => {
             let providerId: string = (<any>req.params).providerId;
-            return passport.authenticate(providerId, { session: session }) (req, res, next);
+            return passport.authenticate(providerId, { session: session, callbackURL: `/${this.options.basePath}/${req.params.providerId}/callback/${req.params.id}` })(req, res, next);
         };
     }
 

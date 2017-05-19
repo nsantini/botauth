@@ -5,7 +5,7 @@
         "sourceMap": true,
         "noImplicitAny": true,
         "outDir": "lib",
-        "noEmitOnError": true,
+        "noEmitOnError": false,
         "removeComments": true,
         "declaration": true
     },
